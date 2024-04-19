@@ -429,7 +429,6 @@ if __name__ == "__main__":
                     'ppg_phase': positive_phases_string,
                     'ppg_amplitude': positive_magnitudes_string
                 }
-                print(data_episode)
 
                 df_cardiac_cycle = df_cardiac_cycle._append(data_episode, ignore_index=True)
 
