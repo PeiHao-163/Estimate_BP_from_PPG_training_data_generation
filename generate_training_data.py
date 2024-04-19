@@ -2,6 +2,8 @@ import os
 import glob
 import numpy as np
 import pandas as pd
+
+import time
 import matplotlib.pyplot as plt
 
 from sklearn.preprocessing import StandardScaler
@@ -411,6 +413,10 @@ if __name__ == "__main__":
                 positive_magnitudes = np.round(positive_magnitudes, 4)
                 positive_phases = np.round(positive_phases, 4)
 
+                positive_frequencies_string = ":".join(map(str, positive_frequencies))
+                positive_magnitudes_string = ":".join(map(str, positive_magnitudes))
+                positive_phases_string = ":".join(map(str, positive_phases))
+
                 ###########################[Step 12: Extract key information and save it into a "SubjectXX.csv" file]###########################
                 data_episode = {
                     'cycle_index': cycle_count,
@@ -419,10 +425,11 @@ if __name__ == "__main__":
                     'correlation': ppg_abp_correlation,
                     'systolic_bp': systolic_bp,
                     'diastolic_bp': diastolic_bp,
-                    'ppg_frequency': positive_frequencies,
-                    'ppg_phase': positive_phases,
-                    'ppg_amplitude': positive_magnitudes
+                    'ppg_frequency': positive_frequencies_string,
+                    'ppg_phase': positive_phases_string,
+                    'ppg_amplitude': positive_magnitudes_string
                 }
+                print(data_episode)
 
                 df_cardiac_cycle = df_cardiac_cycle._append(data_episode, ignore_index=True)
 
