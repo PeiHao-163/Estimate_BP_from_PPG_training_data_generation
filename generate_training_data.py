@@ -18,7 +18,7 @@ lowcut_freq = 0.5
 highcut_freq = 4.0
 sample_rate_ppg = 25
 sample_rate_abp = 997
-sample_length_per_frame = 25
+sample_length_per_frame = 30
 
 ###########################[Function Section]###########################
 # Function to insert zeros into specific indices
@@ -190,7 +190,8 @@ if __name__ == "__main__":
 
         ###########################[Step 1: In PPG data folder, skip the files that are empty or have reversed timestamps]###########################
         if ppg_in_25_hz.empty:
-            print(f'PPG data in {file_name_ppg} is empty! Skip this subject.')
+            print("")
+            print(f'PPG data in ###{file_name_ppg}### is empty! Skip this subject.')
             continue
 
         # Find the gap in the timestamp and return the gap_indices and gap_times
@@ -203,7 +204,8 @@ if __name__ == "__main__":
                 break
 
         if flag_negative_time_gap == 1:
-            print(f'PPG data in {file_name_ppg} has a reversed timestamp! Skip this subject.')
+            print("")
+            print(f'PPG data in ###{file_name_ppg}### has a reversed timestamp! Skip this subject.')
             continue
 
         ###########################[Step 2: Find timestamp gaps in PPG data and fill the gap with 0s]###########################
@@ -282,9 +284,11 @@ if __name__ == "__main__":
         scaler = StandardScaler()  # Initialize MinMaxScaler
         episodes = find_episodes_divided_by_zeros(ppg_with_abp_25_hz['ppg'])
         # print(f'Episode: {len(episodes)}, (From, To): {episodes[0]}')
+        print("")
         print(f'### Entering {file_name_abp} processing! Samples: {len(filtered_df)}, Total Episodes: {len(episodes)} ###')
 
         episode_count = 0
+        episode_discard_count = 0
         for episode in episodes:
             episode_count += 1
             print(f'Now processing Episode: {episode_count}, (From, To): {episode}')
@@ -315,10 +319,12 @@ if __name__ == "__main__":
             abp_valleys_without_notch = sort_by_proximity(abp_valleys, smoothed_abp_valleys)
 
             ###########################[Step 8: Check the error ratio between number of ABP peaks and PPG peaks]###########################
-            ###########################[If the error ratio > 0.2, then skip this episode]###########################
-            ppg_abp_error_ratio = abs(len(ppg_peaks) - len(abp_peaks_without_notch)) / len(ppg_peaks)
-            if ppg_abp_error_ratio > 0.2:
-                print(f"""Current episode: {episode_count}, (From, To): {episode}, Discarded for high PPG and ABP error ratio: {ppg_abp_error_ratio:.2f}""")
+            ###########################[If the error > 20, then skip this episode]###########################
+            #ppg_abp_error_ratio = abs(len(ppg_peaks) - len(abp_peaks_without_notch)) / len(abp_peaks_without_notch)
+            ppg_abp_abs_error = abs(len(ppg_peaks) - len(abp_peaks_without_notch))
+            if ppg_abp_abs_error > 20:
+                episode_discard_count += 1
+                print(f"""Current episode: {episode_count}, (From, To): {episode}, Discarded for high PPG({len(ppg_peaks)}) and ABP({len(abp_peaks_without_notch)}) error: {ppg_abp_abs_error}""")
                 continue
             # else:
             #     print(f'PPG and ABP peaks error ratio: {ppg_abp_error_ratio:.2f}')
@@ -346,7 +352,7 @@ if __name__ == "__main__":
                 # Check if the current cardiac cycle is normal (0.4 - 3 sec)
                 bp_cycle_interval = abp_range[1] - abp_range[0]
                 if bp_cycle_interval > 75 or bp_cycle_interval < 10:
-                    print(f"Current BP cycle's total samples [{bp_cycle_interval}] is not in the range (10,75), discard this cycle!")
+                    #print(f"Current BP cycle's total samples [{bp_cycle_interval}] is not in the range (10,75), discard this cycle!")
                     continue
 
                 # Extract the systolic bp and diastolic bp
@@ -357,22 +363,23 @@ if __name__ == "__main__":
 
                 # Check if the systolic bp is normal (80 - 180 mmHg)
                 if systolic_bp > 180 or systolic_bp < 80:
-                    print(f"[Cycle {cycle_count}]Current SBP ({systolic_bp}) is not in the range (80, 180), discard this cycle!")
+                    #print(f"[Cycle {cycle_count}]Current SBP ({systolic_bp}) is not in the range (80, 180), discard this cycle!")
                     continue
 
                 # Check if the diastolic bp is normal (>= 20 mmHg)
                 if diastolic_bp < 20:
-                    print(f"[Cycle {cycle_count}]Current DBP ({diastolic_bp}) is smaller than 20, discard this cycle!")
+                    #print(f"[Cycle {cycle_count}]Current DBP ({diastolic_bp}) is smaller than 20, discard this cycle!")
                     continue
 
                 # Check if the error between systolic and diastolic bp is normal (< 20 mmHg)
                 if systolic_bp - diastolic_bp < 20:
-                    print(f"SBP - DBP < 20, discard this cycle!")
+                    #print(f"SBP - DBP < 20, discard this cycle!")
+                    continue
 
                 # Check if the current cardiac cycle has a longer begin-to-peak samples than samples-per-frame
-                if ppg_peak[0] - ppg_range[0] > sample_length_per_frame:
+                #if ppg_peak[0] - ppg_range[0] > sample_length_per_frame:
                     # print(f"Cycle {cycle_count} has length of {ppg_range[1] - ppg_range[0]}! Skip this round!")
-                    continue
+                #    continue
 
                 ppg_current_cycle = ppg_abp_episode['ppg_filtered'][ppg_range[0]:ppg_range[1]]
                 abp_current_cycle = ppg_abp_episode['abp'][abp_range[0]:abp_range[1]]
@@ -384,15 +391,23 @@ if __name__ == "__main__":
 
                 # If the current cardiac cycle of ABP and PPG has a correlation less than 0.39, then skip this round
                 if ppg_abp_correlation < 0.39:
+                    #print(f"Correlation {ppg_abp_correlation} < 0.39, discard this cycle!")
                     continue
+
+                # Extend the PPG cycle with 10% of the previous cycle and 5% of the following cycle
+                ppg_current_cycle_length = len(ppg_current_cycle)
+                extend_length_previous = round(ppg_current_cycle_length * 0.1)
+                extend_length_following = round(ppg_current_cycle_length * 0.05)
+                ppg_current_cycle_exteded = ppg_abp_episode['ppg_filtered'][(ppg_range[0] - extend_length_previous):(ppg_range[1] + extend_length_following)]
+                #print(f'Original PPG cycle length vs. extended PPG cycle length: {ppg_current_cycle_length} vs. {len(ppg_current_cycle_exteded)}')
 
                 ###########################[Step 11: Get the positive frequency and phase of the ppg signal]###########################
                 # Get the frequency and phase of the current ppg cardiac cycle
-                if len(ppg_current_cycle) < sample_length_per_frame:
-                    difference = sample_length_per_frame - len(ppg_current_cycle)
-                    ppg_current_frame = pd.concat([ppg_current_cycle, pd.Series([0] * difference)], ignore_index=True)
+                if len(ppg_current_cycle_exteded) < sample_length_per_frame:
+                    difference = sample_length_per_frame - len(ppg_current_cycle_exteded)
+                    ppg_current_frame = pd.concat([ppg_current_cycle_exteded, pd.Series([0] * difference)], ignore_index=True)
                 else:
-                    ppg_current_frame = ppg_current_cycle[:sample_length_per_frame]
+                    ppg_current_frame = ppg_current_cycle_exteded[:sample_length_per_frame]
 
 
                 fft_ppg_result = np.fft.fft(ppg_current_frame)
@@ -442,3 +457,6 @@ if __name__ == "__main__":
             filename = f'episode_{episode_count}.csv'
             full_path = os.path.join(output_folder_path, filename)
             #df_cardiac_cycle.to_csv(full_path)
+
+        print(f"### Ending {file_name_abp} processing! Total episodes: {len(episodes)}, discarded episodes: {episode_discard_count}, discard ratio: {(episode_discard_count / len(episodes)):.2f} ###")
+        print("")
